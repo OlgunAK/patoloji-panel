@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<!--
+  Patoloji Gunluk Kabul paneli - GitHub Pages surumu.
+
+  Bu dosya HERKESE ACIK bir depoda durur. Icinde hasta verisi, anahtar,
+  script adresi YOK ve olmamali. Veri Apps Script'ten fetch ile gelir.
+  Script kimligi (d) ve panel anahtari (y) baglantinin '#' sonrasindadir:
+      .../#d=<dagitim kimligi>&y=<PANEL_TOKEN>[&s=katalog][&t=yyyy-mm-dd][&k=<doktor>]
+  Tarayici '#' sonrasini hicbir sunucuya gondermez; GitHub'a hic gitmez.
+  Baglantiyi Apps Script uretir: deckLinki_() / linkGonder().
+
+  KAYNAK: ozel depodaki bulut/panel/index.html. Herkese acik depoya
+  yalnizca bu dosya kopyalanir; .gs dosyasi ASLA kopyalanmaz.
+-->
+<html lang="tr"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<meta name="referrer" content="no-referrer">
+<title>Açılacak Dokular</title>
+<style>
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  body{margin:0;background:#0f1115;color:#e8eaed;
+       font:15px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+       padding-bottom:112px}
+  header{position:sticky;top:0;z-index:10;background:#161a20;border-bottom:1px solid #262c36;padding:14px 18px 12px}
+  h1{margin:0;font-size:17px;font-weight:650;letter-spacing:-.2px}
+  .tarih{color:#8b95a5;font-size:13px;margin-top:2px}
+  .sayilar{display:flex;gap:20px;margin-top:11px;flex-wrap:wrap}
+  .sayi b{display:block;font-size:23px;font-weight:700;line-height:1.1}
+  .sayi span{font-size:11px;color:#8b95a5;text-transform:uppercase;letter-spacing:.7px}
+  .yesil b{color:#5ad07f} .sari b{color:#e5b95c}
+  nav{display:flex;gap:8px;margin-top:12px}
+  nav a{flex:1;text-align:center;padding:9px;border-radius:8px;text-decoration:none;
+        font-size:13.5px;font-weight:600;background:#1d222a;color:#8b95a5;border:1px solid #262c36}
+  nav a.etkin{background:#1a3350;color:#8ab4f8;border-color:#2b4d75}
+  .grup{margin:20px 16px 0}
+  .grupbas{display:flex;justify-content:space-between;align-items:baseline;padding:0 4px 8px;border-bottom:1px solid #262c36}
+  .grupbas h2{margin:0;font-size:12.5px;font-weight:650;letter-spacing:.4px;text-transform:uppercase;color:#aab4c4}
+  .grupbas em{font-style:normal;font-size:12px;color:#6b7686}
+  button.sat{display:flex;width:100%;align-items:center;gap:12px;text-align:left;
+             background:#181c23;border:1px solid #242a34;border-radius:11px;
+             padding:12px 13px;margin-top:8px;color:inherit;font:inherit;cursor:pointer}
+  button.sat:active{transform:scale(.985)}
+  button.sat.sec{background:#14301f;border-color:#2f7a4d}
+  button.sat.bekle{border-color:#5a4a1e}
+  .kutu{flex:0 0 22px;height:22px;border:2px solid #414a58;border-radius:6px;
+        display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:transparent}
+  .sat.sec .kutu{background:#2f9e5d;border-color:#2f9e5d;color:#fff}
+  .bilgi{flex:1;min-width:0}
+  .defter{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px;color:#7f8b9c;letter-spacing:.3px}
+  .tetkik{font-size:14.5px;margin-top:1px;word-break:break-word}
+  .rozet{display:inline-block;font-size:10px;font-weight:700;letter-spacing:.5px;
+         padding:2px 6px;border-radius:4px;margin-left:6px;vertical-align:1px}
+  .r-bekle{background:#3a2f10;color:#e5b95c}
+  .r-elle{background:#1a3350;color:#8ab4f8}
+  /* kisiye ozel bakis + ustte acilacaklar */
+  .kisiler{display:flex;gap:6px;margin-top:11px;overflow-x:auto;padding-bottom:2px;scrollbar-width:none}
+  .kisiler::-webkit-scrollbar{display:none}
+  .kisiler button{flex:0 0 auto;background:#1d222a;border:1px solid #262c36;color:#8b95a5;
+                  border-radius:999px;padding:7px 12px;font:inherit;font-size:12.5px;font-weight:600;cursor:pointer;white-space:nowrap}
+  .kisiler button.on{background:#1a3350;border-color:#2b4d75;color:#8ab4f8}
+  .kisiler button.yalniz.on{background:#14301f;border-color:#2f7a4d;color:#7fe0a3}
+  .kisiler i{font-style:normal;opacity:.7;margin-left:4px}
+  .ustkutu{margin:16px 16px 0;background:#13261a;border:1px solid #2f7a4d;border-radius:12px;padding:12px 13px 6px}
+  .ustbas{font-size:12px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:#7fe0a3;margin-bottom:6px}
+  .acsat{display:flex;align-items:baseline;gap:10px;padding:7px 0;border-top:1px solid #1f3a29}
+  .ustbas+.acsat{border-top:0}
+  .acsat .no{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:16px;font-weight:700;
+             color:#e8eaed;letter-spacing:.3px;white-space:nowrap}
+  .acsat .ne{flex:1;min-width:0;font-size:13.5px;color:#c8d1de;word-break:break-word}
+  .acsat .kim{font-size:11.5px;color:#7f8b9c;white-space:nowrap}
+  .acbos{font-size:13.5px;color:#7f8b9c;padding:4px 0 8px}
+  /* katalog */
+  .cip{display:flex;gap:8px;margin-top:10px}
+  .cip button{flex:1;background:#1d222a;border:1px solid #262c36;color:#8b95a5;
+              border-radius:999px;padding:8px;font:inherit;font-size:13px;font-weight:600;cursor:pointer}
+  .cip button.on{background:#3a2f10;border-color:#5a4a1e;color:#e5c96c}
+  .cip button.on.hepsi{background:#1a3350;border-color:#2b4d75;color:#8ab4f8}
+  .kart{background:#181c23;border:1px solid #242a34;border-radius:12px;padding:13px;margin:9px 16px 0}
+  .kart.karar{opacity:.55}
+  .kart .ad{font-size:14.5px;word-break:break-word}
+  .kart .meta{font-size:11.5px;color:#7f8b9c;margin-top:3px;
+              font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+  .etiket{font-size:10.5px;color:#6b7686;text-transform:uppercase;letter-spacing:.6px;margin:12px 0 5px}
+  .secenek{display:flex;gap:8px}
+  .secenek button{flex:1;border:1px solid #2c3440;background:#1d222a;color:#aab4c4;
+                  border-radius:9px;padding:10px;font:inherit;font-size:13.5px;font-weight:600;cursor:pointer}
+  .secenek button.on-a{background:#14301f;border-color:#2f7a4d;color:#7fe0a3}
+  .secenek button.on-h{background:#301a17;border-color:#7a3d2f;color:#f0a08c}
+  button.sira{width:100%;border:1px solid #2c3440;background:#1d222a;color:#8b95a5;
+              border-radius:9px;padding:9px;font:inherit;font-size:12.5px;font-weight:600;
+              cursor:pointer;text-align:left}
+  button.sira.on-s{background:#2b2410;border-color:#7a6a2f;color:#e5c96c}
+  footer{position:fixed;left:0;right:0;bottom:0;background:#161a20;border-top:1px solid #262c36;
+         padding:11px 14px calc(11px + env(safe-area-inset-bottom));display:flex;gap:9px;align-items:center}
+  footer .adet{flex:1;font-size:13.5px;color:#aab4c4}
+  footer .adet b{color:#5ad07f;font-size:17px}
+  footer button{border:0;border-radius:9px;padding:12px 16px;font:inherit;font-weight:650;cursor:pointer}
+  .kaydet{background:#2f9e5d;color:#fff}
+  .bildir{background:#242a34;color:#c8d1de}
+  footer button:disabled{opacity:.45}
+  .bos{text-align:center;color:#6b7686;padding:64px 30px;font-size:15px}
+  #tost{position:fixed;left:50%;transform:translateX(-50%);bottom:96px;background:#2f9e5d;color:#fff;
+        padding:11px 20px;border-radius:9px;font-size:14px;font-weight:600;opacity:0;
+        transition:opacity .25s;pointer-events:none;z-index:20;max-width:88vw;text-align:center}
+  #tost.gor{opacity:1} #tost.hata{background:#c5432f}
+</style></head><body>
+<div id="kok"></div><div id="tost"></div>
+<script>
+let V = null;
+const degisen = {};
+
+// ─────────── BAGLANTI ───────────
+// Panel GitHub Pages'ten sunuluyor; script.google.com'dan sunulunca cok
+// hesapli Chrome /u/1/'e yonlenip hata veriyordu. Veri ve kayit Apps
+// Script'le fetch uzerinden: okuma GET ?json=1, yazma POST (text/plain,
+// on-ucus istegi dogmasin diye; Apps Script OPTIONS'a cevap vermiyor).
+let H = {};
+function hashOku(){
+  const o={};
+  location.hash.replace(/^#/,'').split('&').forEach(function(p){
+    if(!p) return;
+    const i=p.indexOf('=');
+    const a=i<0?p:p.slice(0,i), b=i<0?'':p.slice(i+1);
+    try{ o[decodeURIComponent(a)]=decodeURIComponent(b.replace(/\+/g,' ')); }catch(e){}
+  });
+  return o;
+}
+function enc(x){ return encodeURIComponent(x); }
+function hashLink(sayfa){
+  return '#d='+enc(H.d)+'&y='+enc(H.y)+'&s='+sayfa+(H.t?'&t='+enc(H.t):'');
+}
+function scriptUrl(){ return 'https://script.google.com/macros/s/'+enc(H.d)+'/exec'; }
+
+function cevapOku(r){
+  return r.text().then(function(t){
+    try{ return JSON.parse(t); }
+    catch(e){ throw new Error('Script JSON yerine sayfa döndü (HTTP '+r.status+'). Dağıtım "Herkes" erişimli mi?'); }
+  });
+}
+// Panel islemleri. {hata} gelirse hata sayilir; {ok:false, mesaj} normal cevaptir.
+function api(govde){
+  govde.panel=1; govde.y=H.y;
+  return fetch(scriptUrl(),{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},
+                            body:JSON.stringify(govde)})
+    .then(cevapOku)
+    .then(function(r){ if(r.hata) throw new Error(r.hata); return r; });
+}
+
+function bosEkran(baslik,metin,dugme){
+  document.getElementById('kok').innerHTML='<div class="bos"><b style="color:#e8eaed">'+kacar(baslik)+'</b>'
+    +(metin?'<br><br><span style="font-size:13px">'+metin+'</span>':'')
+    +(dugme?'<br><br><button class="bildir" id="btnTekrar" style="border:0;border-radius:9px;padding:11px 18px;font:inherit;font-weight:650">Yeniden dene</button>':'')
+    +'</div>';
+  const b=document.getElementById('btnTekrar'); if(b) b.addEventListener('click',yukle);
+}
+
+function yukle(){
+  H=hashOku();
+  if(!H.d || !H.y || !/^[A-Za-z0-9_-]{20,}$/.test(H.d)){
+    bosEkran('Bağlantı eksik','Bu sayfa anahtarlı bağlantıyla açılır. Apps Script\'te <b>linkGonder()</b> çalıştırıp gelen bağlantıyı kullan.');
+    return;
+  }
+  bosEkran('Yükleniyor…');
+  const s=(H.s==='katalog')?'katalog':'bugun';
+  fetch(scriptUrl()+'?json=1&y='+enc(H.y)+'&s='+s+(H.t?'&t='+enc(H.t):'')+(H.k?'&k='+enc(H.k):''))
+    .then(cevapOku)
+    .then(function(r){
+      if(!r.ok) throw new Error(r.hata==='yetkisiz'
+        ? 'Anahtar eşleşmedi. Apps Script\'te linkGonder() ile yeni bağlantı al.' : (r.hata||'bilinmeyen hata'));
+      V=r.veri; hazirla();
+      document.title = V.sayfa==='katalog' ? 'Hizmet Kataloğu' : 'Açılacak Dokular';
+      if(V.sayfa==='katalog') cizKatalog(); else cizBugun();
+    })
+    .catch(function(e){ bosEkran('Veri alınamadı',kacar(e.message),true); });
+}
+window.addEventListener('hashchange',yukle);
+
+function kacar(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){
+  return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+
+function nav(etkin){
+  return '<nav>'
+    + '<a href="'+hashLink('bugun')+'" class="'+(etkin==='bugun'?'etkin':'')+'">Bugün</a>'
+    + '<a href="'+hashLink('katalog')+'" class="'+(etkin==='katalog'?'etkin':'')+'">Katalog</a>'
+    + '</nav>';
+}
+
+function tost(m,hata){
+  const t=document.getElementById('tost');
+  t.textContent=m; t.className='gor'+(hata?' hata':'');
+  setTimeout(function(){ t.className=''; },2600);
+}
+function kilit(d){
+  document.querySelectorAll('footer button').forEach(function(b){ b.disabled=d; });
+}
+
+// ─────────── BUGÜN ───────────
+// KISIYE OZEL BAKIS: ustteki ciplerden bir kabul doktoru secilince sayfa
+// yalnizca onun vakalarini gosterir. Secim baglantiya ?k=<ad> ile gomulebilir
+// (kisiLinkleri()); yoksa telefon son secimi hatirlar. "Yalniz acilacak"
+// cipi listeden acilmayacaklari gizler.
+// ACILACAKLAR EN USTTE: defter numarasina gore sirali, vaka basina tek satir.
+let kisi='', yalnizAc=false;
+let kayitHarita={};
+
+// Her veri yuklemesinden sonra durum sifirdan kurulur.
+function hazirla(){
+  Object.keys(degisen).forEach(function(k){ delete degisen[k]; });
+  kayitHarita={};
+  if(V.sayfa==='bugun'){
+    V.gruplar.forEach(function(g){ g.kayitlar.forEach(function(k){ k.dr=g.dr; k.drKisa=g.kisa; kayitHarita[k.id]=k; }); });
+    kisi=V.kisi||'';
+    if(!kisi){ try{ kisi=localStorage.getItem('kabulKisi')||''; }catch(e){} }
+    try{ yalnizAc=localStorage.getItem('kabulYalnizAc')==='1'; }catch(e){}
+  } else {
+    filtre = V.bekleyen>0 ? 'kararsiz' : 'tumu';
+  }
+}
+
+function kisaAdi(dr){
+  for(let i=0;i<V.gruplar.length;i++) if(V.gruplar[i].dr===dr) return V.gruplar[i].kisa||dr;
+  const p=String(dr).trim().split(/\s+/);
+  return p.length>1 ? p[0].charAt(0)+'.'+p[p.length-1] : dr;
+}
+function gorunenGruplar(){
+  return V.gruplar.filter(function(g){ return !kisi || g.dr===kisi; });
+}
+function gorunenKayitlar(){
+  let a=[]; gorunenGruplar().forEach(function(g){ a=a.concat(g.kayitlar); }); return a;
+}
+function defterSayi(no){ const m=String(no||'').match(/(\d+)/); return m?parseInt(m[1],10):0; }
+
+function ustKutuHtml(){
+  const vaka={}, liste=[];
+  let doku=0;
+  gorunenKayitlar().forEach(function(k){
+    if(!k.acilir) return;
+    doku++;
+    let v=vaka[k.defterNo];
+    if(!v){ v=vaka[k.defterNo]={no:k.defterNo,sayi:defterSayi(k.defterNo),saat:k.kabulSaati||'',ne:[],dr:k.drKisa}; liste.push(v); }
+    const ad=k.kisaAd||k.tetkikAdi;
+    if(v.ne.indexOf(ad)<0) v.ne.push(ad);
+    if(k.kabulSaati && (!v.saat || k.kabulSaati<v.saat)) v.saat=k.kabulSaati;
+  });
+  liste.sort(function(a,b){ return a.sayi-b.sayi; });
+  let h='<div class="ustbas">Açılacak · '+liste.length+' vaka / '+doku+' doku</div>';
+  if(!liste.length) return h+'<div class="acbos">'+(kisi?'Bu kişinin açılacak dokusu yok.':'Açılacak doku yok.')+'</div>';
+  liste.forEach(function(v){
+    h+='<div class="acsat"><span class="no">'+kacar(v.no)+'</span>'
+     + '<span class="ne">'+kacar(v.ne.join(', '))+(v.saat?' <span style="color:#6b7686">· '+kacar(v.saat)+'</span>':'')+'</span>'
+     + (kisi?'':'<span class="kim">'+kacar(v.dr)+'</span>')+'</div>';
+  });
+  return h;
+}
+
+function cizBugun(){
+  const o=V.ozet;
+  const kayitlar=gorunenKayitlar(), vakaSay={};
+  kayitlar.forEach(function(k){ vakaSay[k.defterNo]=1; });
+  const acSay=kayitlar.filter(function(k){ return k.acilir; }).length;
+  const bekSay=kayitlar.filter(function(k){ return k.bekliyor; }).length;
+
+  // Secili kisi bugun hic gelmediyse de cipi gorunsun (bos liste ama secim belli)
+  const kisiler=V.gruplar.map(function(g){ return g.dr; });
+  if(kisi && kisiler.indexOf(kisi)<0) kisiler.push(kisi);
+
+  let h='<header><h1>Açılacak Dokular</h1><div class="tarih">'+V.tarihStr
+      + (kisi?' · <b style="color:#8ab4f8">'+kacar(kisi)+'</b>':'')+'</div>'
+      + '<div class="sayilar">'
+      + '<div class="sayi"><b>'+Object.keys(vakaSay).length+'</b><span>vaka</span></div>'
+      + '<div class="sayi"><b>'+kayitlar.length+'</b><span>doku</span></div>'
+      + '<div class="sayi yesil"><b id="ustSayi">'+acSay+'</b><span>açılacak</span></div>'
+      + (bekSay?'<div class="sayi sari"><b>'+bekSay+'</b><span>kararsız</span></div>':'')
+      + '</div>';
+  if(V.gruplar.length || kisi){
+    h+='<div class="kisiler">'
+     + '<button class="yalniz'+(yalnizAc?' on':'')+'" id="btnYalniz">'+(yalnizAc?'✓ ':'')+'Yalnız açılacak</button>'
+     + '<button data-kisi="" class="'+(kisi?'':'on')+'">Tümü</button>'
+     + kisiler.map(function(d){
+         const g=V.gruplar.filter(function(x){ return x.dr===d; })[0];
+         const n=g ? g.kayitlar.filter(function(k){ return k.acilir; }).length : 0;
+         return '<button data-kisi="'+kacar(d)+'" class="'+(kisi===d?'on':'')+'">'
+              + kacar(kisaAdi(d))+(n?'<i>'+n+'</i>':'')+'</button>';
+       }).join('')
+     + '</div>';
+  }
+  h+=nav('bugun')+'</header>';
+
+  if(!V.gruplar.length){
+    h+='<div class="bos">Bugün için kayıt yok.<br><br>'
+      +'<span style="font-size:13px">Ajan henüz veri göndermemiş olabilir.</span></div>';
+  }
+  else if(o.acilacak===0 && o.bekleyen===o.toplamDoku){
+    h+='<div style="margin:16px;padding:14px;background:#2b2410;border:1px solid #5a4a1e;'
+      +'border-radius:10px;font-size:14px;color:#e5c96c">'
+      +'Hiçbir tetkik karara bağlanmamış. <a href="'+hashLink('katalog')
+      +'" style="color:#8ab4f8">Katalog sayfasından</a> hangi tetkiklerin açılacağını '
+      +'bir kez işaretle, sonraki vakalar otomatik uysun.</div>';
+  }
+  else {
+    h+='<div class="ustkutu" id="ustKutu">'+ustKutuHtml()+'</div>';
+    const gruplar=gorunenGruplar();
+    if(!gruplar.length) h+='<div class="bos">'+kacar(kisi)+' için bugün kayıt yok.</div>';
+    gruplar.forEach(function(g){
+      // Grup icinde de acilacaklar ustte; kendi aralarinda gelis sirasi korunur
+      const sirali=g.kayitlar.map(function(k,i){ return {k:k,i:i}; })
+        .sort(function(a,b){ return (a.k.acilir===b.k.acilir) ? a.i-b.i : (a.k.acilir?-1:1); })
+        .map(function(x){ return x.k; })
+        .filter(function(k){ return !yalnizAc || k.acilir; });
+      if(!sirali.length) return;
+      h+='<div class="grup"><div class="grupbas"><h2>'+kacar(g.dr)+'</h2><em>'+g.kayitlar.length+' doku</em></div>';
+      sirali.forEach(function(k){
+        h+='<button class="sat'+(k.acilir?' sec':'')+(k.bekliyor?' bekle':'')+'" data-id="'+kacar(k.id)+'">'
+         + '<div class="kutu">✓</div><div class="bilgi">'
+         + '<div class="defter">'+kacar(k.defterNo)+(k.kabulSaati?' · '+kacar(k.kabulSaati):'')+'</div>'
+         + '<div class="tetkik">'+kacar(k.tetkikAdi)
+         + (k.bekliyor?'<span class="rozet r-bekle">KARARSIZ</span>':'')
+         + (k.elle?'<span class="rozet r-elle">ELLE</span>':'')
+         + '</div></div></button>';
+      });
+      h+='</div>';
+    });
+  }
+
+  // Alt sayac ve "Listeyi gonder" HERKESIN listesiyle calisir (aciciya giden liste)
+  h+='<footer><div class="adet"><b id="altSayi">'+toplamAcilacak()+'</b> doku açılacak'
+   + (kisi?' <span style="font-size:11.5px;color:#6b7686">(tümü)</span>':'')+'</div>'
+   + '<button class="bildir" id="btnBildir">Listeyi gönder</button>'
+   + '<button class="kaydet" id="btnKaydet">Kaydet</button></footer>';
+  document.getElementById('kok').innerHTML=h;
+
+  document.querySelectorAll('button.sat').forEach(function(b){
+    b.addEventListener('click',function(){
+      const id=b.dataset.id, yeni=!b.classList.contains('sec');
+      b.classList.toggle('sec',yeni);
+      if(kayitHarita[id]) kayitHarita[id].acilir=yeni;
+      degisen[id]={id:id,karar:yeni?'E':'H'};
+      sayBugun();
+    });
+  });
+  document.querySelectorAll('.kisiler [data-kisi]').forEach(function(b){
+    b.addEventListener('click',function(){
+      kisi=b.dataset.kisi;
+      try{ localStorage.setItem('kabulKisi',kisi); }catch(e){}
+      cizBugun(); window.scrollTo(0,0);
+    });
+  });
+  const by=document.getElementById('btnYalniz');
+  if(by) by.addEventListener('click',function(){
+    yalnizAc=!yalnizAc;
+    try{ localStorage.setItem('kabulYalnizAc',yalnizAc?'1':'0'); }catch(e){}
+    cizBugun();
+  });
+  document.getElementById('btnKaydet').addEventListener('click',kaydetBugun);
+  document.getElementById('btnBildir').addEventListener('click',bildir);
+}
+
+function toplamAcilacak(){
+  return Object.keys(kayitHarita).filter(function(id){ return kayitHarita[id].acilir; }).length;
+}
+
+function sayBugun(){
+  document.getElementById('ustSayi').textContent=
+    gorunenKayitlar().filter(function(k){ return k.acilir; }).length;
+  document.getElementById('altSayi').textContent=toplamAcilacak();
+  const u=document.getElementById('ustKutu');
+  if(u) u.innerHTML=ustKutuHtml();
+}
+
+function kaydetBugun(){
+  const d=Object.keys(degisen).map(function(k){ return degisen[k]; });
+  if(!d.length){ tost('Değişiklik yok'); return; }
+  kilit(true);
+  api({islem:'secimKaydet',tarih:V.tarih,degisiklikler:d})
+    .then(function(r){ kilit(false); Object.keys(degisen).forEach(function(k){delete degisen[k];});
+                       tost('Kaydedildi · '+r.adet+' kayıt'); })
+    .catch(function(e){ kilit(false); tost('Hata: '+e.message,true); });
+}
+
+// Kaydedilmemis isaretler once kaydedilir, sonra liste gonderilir (tek istek).
+function bildir(){
+  kilit(true);
+  const d=Object.keys(degisen).map(function(k){ return degisen[k]; });
+  api({islem:'acilacakBildir',tarih:V.tarih,degisiklikler:d})
+    .then(function(r){ kilit(false); Object.keys(degisen).forEach(function(k){delete degisen[k];});
+                       tost(r.ok ? (r.adet+' doku · '+(r.mesaj||'gönderildi')) : r.mesaj, !r.ok); })
+    .catch(function(e){ kilit(false); tost('Hata: '+e.message,true); });
+}
+
+// ─────────── KATALOG ───────────
+// Varsayilan gorunum: sadece KARARSIZ olanlar. Gunluk akista birkac yeni
+// tetkik geliyor; hepsini bir arada gostermek yerine sadece onlari gosteriyoruz.
+let filtre = 'tumu';   // hazirla() veriye gore ayarlar
+
+function cizKatalog(){
+  const kararsizSayi = V.hizmetler.filter(function(x){ return !x.kararVar; }).length;
+  if(filtre==='kararsiz' && kararsizSayi===0) filtre='tumu';
+  const gosterilen = V.hizmetler.filter(function(x){
+    return filtre==='tumu' ? true : !x.kararVar;
+  });
+
+  let h='<header><h1>Hizmet Kataloğu</h1>'
+      + '<div class="tarih">Bir kez karar ver, sonraki vakalar otomatik uysun</div>'
+      + '<div class="sayilar">'
+      + '<div class="sayi"><b>'+V.hizmetler.length+'</b><span>tetkik</span></div>'
+      + '<div class="sayi sari"><b id="ustSayi">'+kararsizSayi+'</b><span>kararsız</span></div>'
+      + '</div>'
+      + '<div class="cip">'
+      + '<button data-f="kararsiz" class="'+(filtre==='kararsiz'?'on':'')+'">Kararsız ('+kararsizSayi+')</button>'
+      + '<button data-f="tumu" class="hepsi '+(filtre==='tumu'?'on':'')+'">Tümü ('+V.hizmetler.length+')</button>'
+      + '</div>'
+      + nav('katalog')+'</header>';
+
+  if(!V.hizmetler.length){ h+='<div class="bos">Katalog boş. Ajan ilk veriyi gönderince dolacak.</div>'; }
+  else if(!gosterilen.length){
+    h+='<div class="bos">Kararsız tetkik yok.<br><br>'
+      +'<span style="font-size:13px">Yeni bir tetkik geldiğinde burada belirir.</span></div>';
+  }
+  else gosterilen.forEach(function(x){
+    const i = V.hizmetler.indexOf(x);
+    h+='<div class="kart'+(x.kararVar?' karar':'')+'" data-i="'+i+'">'
+     + '<div class="ad">'+kacar(x.ad)+'</div>'
+     + '<div class="meta">'+kacar(x.kodAra||'—')+' · '+kacar(x.kisaAd)+' · '+x.adet+' kez</div>'
+     + '<div class="etiket">Doku açma</div>'
+     + '<div class="secenek">'
+     + '<button data-k="a" class="'+(x.kararVar&&x.acilir?'on-a':'')+'">Açılır</button>'
+     + '<button data-k="h" class="'+(x.kararVar&&!x.acilir?'on-h':'')+'">Açılmaz</button>'
+     + '</div>'
+     + '<div class="etiket">Kabul sırası</div>'
+     + '<button class="sira '+(x.siraDisi?'on-s':'')+'" data-k="s">'
+     + (x.siraDisi?'✓ ':'')+'Sıra dışı — 50/50 rotasyon sayacına girmesin</button>'
+     + '</div>';
+  });
+
+  h+='<footer><div class="adet"><b id="altSayi">0</b> değişiklik</div>'
+   + '<button class="kaydet" id="btnKaydet">Kaydet</button></footer>';
+  document.getElementById('kok').innerHTML=h;
+
+  document.querySelectorAll('.kart').forEach(function(kart){
+    const x=V.hizmetler[+kart.dataset.i];
+    kart.querySelectorAll('[data-k]').forEach(function(b){
+      b.addEventListener('click',function(){
+        const k=b.dataset.k;
+        if(k==='s'){
+          x.siraDisi=!x.siraDisi;
+          b.className='sira'+(x.siraDisi?' on-s':'');
+          b.textContent=(x.siraDisi?'✓ ':'')+'Sıra dışı — 50/50 rotasyon sayacına girmesin';
+        } else {
+          x.acilir=(k==='a'); x.kararVar=true;
+          kart.querySelector('[data-k=a]').className=(k==='a'?'on-a':'');
+          kart.querySelector('[data-k=h]').className=(k==='h'?'on-h':'');
+          kart.classList.remove('karar');
+        }
+        degisen[x.ad]={ad:x.ad,acilir:x.kararVar?x.acilir:null,siraDisi:x.siraDisi};
+        sayKatalog();
+      });
+    });
+  });
+  document.querySelectorAll('.cip button').forEach(function(b){
+    b.addEventListener('click',function(){ filtre=b.dataset.f; cizKatalog(); });
+  });
+  document.getElementById('btnKaydet').addEventListener('click',kaydetKatalog);
+}
+
+function sayKatalog(){
+  document.getElementById('altSayi').textContent=Object.keys(degisen).length;
+  document.getElementById('ustSayi').textContent=
+    V.hizmetler.filter(function(x){ return !x.kararVar; }).length;
+}
+
+function kaydetKatalog(){
+  const d=Object.keys(degisen).map(function(k){ return degisen[k]; });
+  if(!d.length){ tost('Değişiklik yok'); return; }
+  kilit(true);
+  api({islem:'katalogKaydet',degisiklikler:d})
+    .then(function(r){
+        kilit(false);
+        Object.keys(degisen).forEach(function(k){ delete degisen[k]; });
+        cizKatalog();                       // karara bağlananlar listeden düşsün
+        tost('Kaydedildi · '+r.adet+' hizmet');
+      })
+    .catch(function(e){ kilit(false); tost('Hata: '+e.message,true); });
+}
+
+yukle();
+</script></body></html>
