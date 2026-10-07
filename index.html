@@ -267,6 +267,12 @@ function cizBugun(){
 
   let h='<header><h1>Açılacak Dokular</h1><div class="tarih">'+V.tarihStr
       + (kisi?' · <b style="color:#8ab4f8">'+kacar(kisi)+'</b>':'')+'</div>'
+      + (V.nobet && (V.nobet.frozen||V.nobet.acici)
+          ? '<div class="tarih" style="margin-top:3px">'
+            + (V.nobet.frozen?'Frozen: <b style="color:#c8d1de">'+kacar(V.nobet.frozen)+'</b>':'')
+            + (V.nobet.frozen&&V.nobet.acici?' · ':'')
+            + (V.nobet.acici?'Doku açıcı: <b style="color:#c8d1de">'+kacar(V.nobet.acici)+'</b>':'')
+            + '</div>' : '')
       + '<div class="sayilar">'
       + '<div class="sayi"><b>'+Object.keys(vakaSay).length+'</b><span>vaka</span></div>'
       + '<div class="sayi"><b>'+kayitlar.length+'</b><span>doku</span></div>'
