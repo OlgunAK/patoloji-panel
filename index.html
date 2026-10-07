@@ -69,6 +69,10 @@
              color:#e8eaed;letter-spacing:.3px;white-space:nowrap}
   .acsat .ne{flex:1;min-width:0;font-size:13.5px;color:#c8d1de;word-break:break-word}
   .acsat .kim{font-size:11.5px;color:#7f8b9c;white-space:nowrap}
+  .sira{margin-top:9px;font-size:13px;color:#c8d1de}
+  .siracubuk{height:3px;background:#262c36;border-radius:2px;margin-top:5px;overflow:hidden}
+  .siracubuk i{display:block;height:100%;border-radius:2px}
+  .siraalt{font-size:11.5px;color:#8b95a5;margin-top:4px}
   .acbos{font-size:13.5px;color:#7f8b9c;padding:4px 0 8px}
   /* katalog */
   .cip{display:flex;gap:8px;margin-top:10px}
@@ -209,7 +213,7 @@ function hazirla(){
   Object.keys(degisen).forEach(function(k){ delete degisen[k]; });
   kayitHarita={};
   if(V.sayfa==='bugun'){
-    V.gruplar.forEach(function(g){ g.kayitlar.forEach(function(k){ k.dr=g.dr; k.drKisa=g.kisa; kayitHarita[k.id]=k; }); });
+    V.gruplar.forEach(function(g){ g.kayitlar.forEach(function(k){ k.dr=g.dr; k.drKisa=g.kisa; k.drRenk=g.renk; kayitHarita[k.id]=k; }); });
     kisi=V.kisi||'';
     if(!kisi){ try{ kisi=localStorage.getItem('kabulKisi')||''; }catch(e){} }
     try{ yalnizAc=localStorage.getItem('kabulYalnizAc')==='1'; }catch(e){}
@@ -229,6 +233,28 @@ function gorunenGruplar(){
 function gorunenKayitlar(){
   let a=[]; gorunenGruplar().forEach(function(g){ a=a.concat(g.kayitlar); }); return a;
 }
+// Doktor rengi sunucudan gelir; yalnizca #RRGGBB kabul edilir
+function rk(c){ return /^#[0-9A-Fa-f]{6}$/.test(String(c||''))?c:'#9aa0a6'; }
+
+// Kabul sirasi: kimde, kacinci, siradaki, tur, izinde olabilecekler
+function siraHtml(S){
+  if(!S || !S.guncel) return '';
+  const yuzde=Math.min(100,Math.round(100*S.adet/S.blok));
+  let h='<div class="sira"><div>Sıra <b style="color:'+rk(S.guncel.renk)+'">'+kacar(S.guncel.kisa)+'</b> '
+    + '<b>'+S.adet+'/'+S.blok+'</b> '
+    + (S.kalan>0 ? '<span style="color:'+(S.kalan<=5?'#e5b95c':'#8b95a5')+'">'+S.kalan+' kaldı</span>'
+                 : '<b style="color:#e5b95c">doldu</b>')
+    + (S.sonraki ? ' · '+(S.kalan>0?'sonra ':'<b style="color:#e5b95c">sıra şimdi</b> ')
+                   +'<b style="color:'+rk(S.sonraki.renk)+'">'+kacar(S.sonraki.kisa)+'</b>' : '')
+    + '</div><div class="siracubuk"><i style="width:'+yuzde+'%;background:'+rk(S.guncel.renk)+'"></i></div>';
+  if((S.dongu||[]).length>2) h+='<div class="siraalt">Tur: '+S.dongu.map(function(x){
+      return '<span style="color:'+rk(x.renk)+'">'+kacar(x.kisa)+'</span>'; }).join(' › ')+'</div>';
+  if((S.izinde||[]).length) h+='<div class="siraalt">İzinde olabilir: '+S.izinde.map(function(x){
+      return '<span style="color:'+rk(x.renk)+'">'+kacar(x.kisa)+'</span>'; }).join(', ')
+      +' <span style="opacity:.7">(sırası geldi, gelmedi)</span></div>';
+  return h+'</div>';
+}
+
 function defterSayi(no){ const m=String(no||'').match(/(\d+)/); return m?parseInt(m[1],10):0; }
 
 function ustKutuHtml(){
@@ -238,7 +264,7 @@ function ustKutuHtml(){
     if(!k.acilir) return;
     doku++;
     let v=vaka[k.defterNo];
-    if(!v){ v=vaka[k.defterNo]={no:k.defterNo,sayi:defterSayi(k.defterNo),saat:k.kabulSaati||'',ne:[],dr:k.drKisa}; liste.push(v); }
+    if(!v){ v=vaka[k.defterNo]={no:k.defterNo,sayi:defterSayi(k.defterNo),saat:k.kabulSaati||'',ne:[],dr:k.drKisa,renk:k.drRenk}; liste.push(v); }
     const ad=k.kisaAd||k.tetkikAdi;
     if(v.ne.indexOf(ad)<0) v.ne.push(ad);
     if(k.kabulSaati && (!v.saat || k.kabulSaati<v.saat)) v.saat=k.kabulSaati;
@@ -249,7 +275,7 @@ function ustKutuHtml(){
   liste.forEach(function(v){
     h+='<div class="acsat"><span class="no">'+kacar(v.no)+'</span>'
      + '<span class="ne">'+kacar(v.ne.join(', '))+(v.saat?' <span style="color:#6b7686">· '+kacar(v.saat)+'</span>':'')+'</span>'
-     + (kisi?'':'<span class="kim">'+kacar(v.dr)+'</span>')+'</div>';
+     + (kisi?'':'<span class="kim" style="color:'+rk(v.renk)+'">'+kacar(v.dr)+'</span>')+'</div>';
   });
   return h;
 }
@@ -273,6 +299,7 @@ function cizBugun(){
             + (V.nobet.frozen&&V.nobet.acici?' · ':'')
             + (V.nobet.acici?'Doku açıcı: <b style="color:#c8d1de">'+kacar(V.nobet.acici)+'</b>':'')
             + '</div>' : '')
+      + siraHtml(V.sira)
       + '<div class="sayilar">'
       + '<div class="sayi"><b>'+Object.keys(vakaSay).length+'</b><span>vaka</span></div>'
       + '<div class="sayi"><b>'+kayitlar.length+'</b><span>doku</span></div>'
@@ -315,9 +342,9 @@ function cizBugun(){
         .map(function(x){ return x.k; })
         .filter(function(k){ return !yalnizAc || k.acilir; });
       if(!sirali.length) return;
-      h+='<div class="grup"><div class="grupbas"><h2>'+kacar(g.dr)+'</h2><em>'+g.kayitlar.length+' doku</em></div>';
+      h+='<div class="grup"><div class="grupbas"><h2 style="color:'+rk(g.renk)+'">'+kacar(g.dr)+'</h2><em>'+g.kayitlar.length+' doku</em></div>';
       sirali.forEach(function(k){
-        h+='<button class="sat'+(k.acilir?' sec':'')+(k.bekliyor?' bekle':'')+'" data-id="'+kacar(k.id)+'">'
+        h+='<button class="sat'+(k.acilir?' sec':'')+(k.bekliyor?' bekle':'')+'" style="border-left:3px solid '+rk(g.renk)+'" data-id="'+kacar(k.id)+'">'
          + '<div class="kutu">✓</div><div class="bilgi">'
          + '<div class="defter">'+kacar(k.defterNo)+(k.kabulSaati?' · '+kacar(k.kabulSaati):'')+'</div>'
          + '<div class="tetkik">'+kacar(k.tetkikAdi)
