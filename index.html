@@ -247,10 +247,16 @@ function siraHtml(S){
     + (S.sonraki ? ' · '+(S.kalan>0?'sonra ':'<b style="color:#e5b95c">sıra şimdi</b> ')
                    +'<b style="color:'+rk(S.sonraki.renk)+'">'+kacar(S.sonraki.kisa)+'</b>' : '')
     + '</div><div class="siracubuk"><i style="width:'+yuzde+'%;background:'+rk(S.guncel.renk)+'"></i></div>';
-  if((S.dongu||[]).length>2) h+='<div class="siraalt">Tur: '+S.dongu.map(function(x){
-      return '<span style="color:'+rk(x.renk)+'">'+kacar(x.kisa)+'</span>'; }).join(' › ')+'</div>';
+  // Turda her doktorun son sirasinda kac vaka aldigi; blogu tamamlamayan sari
+  function sayi(x,guncel){
+    if(x.adet==null) return '';
+    const eksik=!guncel && x.adet<S.blok;
+    return ' <span style="color:'+(eksik?'#e5b95c':'#6b7686')+(eksik?';font-weight:700':'')+'">'+x.adet+'</span>';
+  }
+  if((S.dongu||[]).length>1) h+='<div class="siraalt">Tur: '+S.dongu.map(function(x,i){
+      return '<span style="color:'+rk(x.renk)+'">'+kacar(x.kisa)+'</span>'+sayi(x,i===0); }).join(' › ')+'</div>';
   if((S.izinde||[]).length) h+='<div class="siraalt">İzinde olabilir: '+S.izinde.map(function(x){
-      return '<span style="color:'+rk(x.renk)+'">'+kacar(x.kisa)+'</span>'; }).join(', ')
+      return '<span style="color:'+rk(x.renk)+'">'+kacar(x.kisa)+'</span>'+sayi(x,false); }).join(', ')
       +' <span style="opacity:.7">(sırası geldi, gelmedi)</span></div>';
   return h+'</div>';
 }
