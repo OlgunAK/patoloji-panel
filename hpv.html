@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="tr"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<meta name="referrer" content="no-referrer">
+<!--
+  IKI YERDE KULLANILIR, KAYNAK TEK:
+   1) Yerel: ajan PowerShell'i VERI'yi asagidaki yer tutucuya gomer,
+      hpv_takip_paneli.html olarak diske yazar (file:// ile acilir).
+   2) GitHub Pages: bu dosya OLDUGU GIBI herkese acik depoya hpv.html diye
+      kopyalanir. Orada VERI bos gelir; sayfa kimlik + sifre ister ve veriyi
+      Apps Script'ten (bulut\hpv_panel.gs) okur. Baglanti bicimi:
+          .../hpv.html#d=<dagitim kimligi>&y=<sifre>
+      '#' sonrasi tarayicidan hicbir sunucuya gitmez; GitHub'a hic ulasmaz.
+  Bu dosyada hasta verisi, anahtar, script adresi YOK ve olmamali.
+-->
+<title>Smear / HPV Takip Paneli</title>
+<style>
+ *{box-sizing:border-box}
+ body{font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;margin:0;background:#f6f7f9;color:#202124;font-size:14px}
+ header{background:#fff;border-bottom:1px solid #e0e0e0;padding:14px 20px;position:sticky;top:0;z-index:20}
+ h1{margin:0 0 10px;font-size:17px;font-weight:600}
+ .cips{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+ .cip{border:1px solid #d0d0d0;background:#fff;border-radius:16px;padding:5px 13px;cursor:pointer;font-size:13px;user-select:none}
+ .cip:hover{background:#f1f3f4}
+ .cip.aktif{background:#1a73e8;color:#fff;border-color:#1a73e8}
+ .cip .n{font-weight:600;margin-left:5px}
+ .cip.poz.aktif{background:#c5221f;border-color:#c5221f}
+ .cip.bek.aktif{background:#b06000;border-color:#b06000}
+ .cip.ist.aktif{background:#3c4043;border-color:#3c4043}
+ .cip.neg.aktif{background:#188038;border-color:#188038}
+ .cip.notta{border-color:#e0b8c4;color:#8e1537}
+ .cip.notta.aktif{background:#8e1537;color:#fff;border-color:#8e1537}
+ .satir{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+ select,input[type=text]{padding:7px 10px;border:1px solid #d0d0d0;border-radius:6px;font-size:14px;background:#fff}
+ input[type=text]{min-width:230px}
+ .dugme{padding:7px 13px;border:1px solid #d0d0d0;background:#fff;border-radius:6px;cursor:pointer;font-size:13px}
+ .dugme:hover{background:#f1f3f4}
+ .dugme.vurgu{background:#1a73e8;color:#fff;border-color:#1a73e8}
+ .sayac{margin-left:auto;color:#5f6368;font-size:13px}
+ main{padding:16px 20px 60px}
+ table{width:100%;border-collapse:collapse;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+ th{background:#f1f3f4;text-align:left;padding:9px 10px;font-size:12.5px;font-weight:600;cursor:pointer;white-space:nowrap;border-bottom:1px solid #e0e0e0;position:sticky;top:0}
+ th:hover{background:#e8eaed}
+ th .ok{color:#1a73e8;margin-left:3px}
+ td{padding:8px 10px;border-bottom:1px solid #f1f1f1;vertical-align:top}
+ tr:hover td{background:#fafafa}
+ .mono{font-family:ui-monospace,Consolas,monospace}
+ .rz{display:inline-block;padding:2px 8px;border-radius:10px;font-size:11.5px;font-weight:600;white-space:nowrap}
+ .rz.POZITIF{background:#fce8e6;color:#c5221f}
+ .rz.NEGATIF{background:#e6f4ea;color:#188038}
+ .rz.BEKLIYOR{background:#fef7e0;color:#b06000}
+ .rz.ISTENMEMIS{background:#fff8e1;color:#8a6d00}
+ .rz.KAYIT_YOK,.rz.HATA{background:#f3e8fd;color:#7627bb}
+ .rz.NOTTA{background:#f6e4ea;color:#8e1537}
+
+ /* Satir renklendirmesi: sol serit + hafif zemin. Notta HPV cikan satir
+    durumun uzerine yazar; dikkat cekmesi gereken vaka odur. */
+ tr.r{border-left:4px solid transparent}
+ tr.r td:first-child{border-left:4px solid transparent}
+ tr.POZITIF    td:first-child{border-left-color:#c5221f}
+ tr.NEGATIF    td:first-child{border-left-color:#188038}
+ tr.BEKLIYOR   td:first-child{border-left-color:#b06000}
+ tr.ISTENMEMIS td:first-child{border-left-color:#e8b800}
+ tr.KAYIT_YOK  td:first-child,tr.HATA td:first-child{border-left-color:#7627bb}
+ tr.NOTTA      td:first-child{border-left-color:#8e1537}
+
+ tr.POZITIF    td{background:#fffafa}
+ tr.NEGATIF    td{background:#fafefb}
+ tr.BEKLIYOR   td{background:#fffdf6}
+ tr.ISTENMEMIS td{background:#fffef5}
+ tr.NOTTA      td{background:#fdf7f9}
+ tr.POZITIF:hover td{background:#fdf0ef}
+ tr.NEGATIF:hover td{background:#f1faf4}
+ tr.BEKLIYOR:hover td{background:#fdf8ea}
+ tr.ISTENMEMIS:hover td{background:#fdfae6}
+ tr.NOTTA:hover td{background:#faedf1}
+
+ /* Defter no satirin rengini tasir */
+ .dno{font-family:ui-monospace,Consolas,monospace;font-weight:700;font-size:14px}
+ .dno.POZITIF{color:#c5221f}
+ .dno.NEGATIF{color:#188038}
+ .dno.BEKLIYOR{color:#b06000}
+ .dno.ISTENMEMIS{color:#8a6d00}
+ .dno.KAYIT_YOK,.dno.HATA{color:#7627bb}
+ .dno.NOTTA{color:#8e1537}
+
+ .notbay{color:#8e1537;font-size:12px;margin-top:3px;font-weight:600}
+ .notmet{color:#5f6368;font-size:11.5px;font-style:italic;margin-top:2px;max-width:520px}
+ .sonuc{color:#3c4043;font-size:12.5px;max-width:340px}
+ .bos{padding:40px;text-align:center;color:#80868b}
+ .altbilgi{margin-top:14px;color:#80868b;font-size:12px}
+
+ /* Bulut (GitHub Pages) girisi - yerel dosyada hic gorunmez */
+ #giris{position:fixed;inset:0;background:#f6f7f9;z-index:50;display:none;align-items:center;justify-content:center;padding:16px}
+ #giris form{background:#fff;border-radius:10px;box-shadow:0 2px 10px rgba(0,0,0,.1);padding:24px;width:100%;max-width:380px}
+ #giris h2{margin:0 0 4px;font-size:17px}
+ #giris p{margin:0 0 16px;color:#5f6368;font-size:13px}
+ #giris label{display:block;font-size:12.5px;color:#5f6368;margin:10px 0 4px}
+ #giris input[type=text],#giris input[type=password]{width:100%;min-width:0}
+ #giris input[type=password]{padding:7px 10px;border:1px solid #d0d0d0;border-radius:6px;font-size:14px}
+ #giris .hat{margin-top:12px;font-size:13px;color:#3c4043}
+ #giris .dugme{margin-top:16px;width:100%;padding:10px}
+ #girisHata{color:#c5221f;font-size:13px;margin-top:10px;min-height:1em}
+</style></head><body>
+<header>
+  <h1>Smear / HPV Takip Paneli</h1>
+  <div class="cips" id="cips"></div>
+  <div class="satir">
+    <select id="fDoktor"></select>
+    <input type="text" id="fArama" placeholder="Defter no, protokol, sonuc, not icinde ara...">
+    <button class="dugme" id="bNot">Notta HPV gecenler</button>
+    <button class="dugme" id="bTemizle">Temizle</button>
+    <button class="dugme" id="bDisa">Gorunenleri CSV indir</button>
+    <span class="sayac" id="sayac"></span>
+  </div>
+</header>
+<main>
+  <table id="tablo"><thead><tr id="baslik"></tr></thead><tbody id="govde"></tbody></table>
+  <div class="bos" id="bosluk" style="display:none">Bu filtreye uyan kayit yok.</div>
+  <div class="altbilgi" id="altbilgi"></div>
+</main>
+<script>
+var VERI = /*__VERI__*/null;
+var kayitlar = [];
+var notVar   = false;
+
+var DURUMLAR = [
+  {ad:'POZITIF',    sinif:'poz'},
+  {ad:'BEKLIYOR',   sinif:'bek'},
+  {ad:'ISTENMEMIS', sinif:'ist'},
+  {ad:'NEGATIF',    sinif:'neg'},
+  {ad:'KAYIT_YOK',  sinif:'diger'},
+  {ad:'HATA',       sinif:'diger'}
+];
+
+var secilenDurumlar = {};
+var secilenDoktor = '';
+var aramaMetni = '';
+var sadeceNot = false;
+var siraAlan = 'DefterNoSayi';
+var siraYon = -1;
+
+// Tarihi karsilastirilabilir sayiya cevir (gg.aa.yyyy ve ISO destekli)
+function tarihSayi(t){
+  t = String(t||'').trim();
+  if(!t) return 0;
+  var m = t.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if(m) return (+m[1])*10000 + (+m[2])*100 + (+m[3]);
+  m = t.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})/);
+  if(m) return (+m[3])*10000 + (+m[2])*100 + (+m[1]);
+  return 0;
+}
+
+function hazirla(){
+  kayitlar.forEach(function(k){
+    k.DefterNoSayi  = parseInt(k.DefterNo,10) || 0;
+    k.KayitSayi     = tarihSayi(k.KayitTarihi);
+    k.SonucSayi     = tarihSayi(k.SonucTarihi);
+    k._ara = [k.DefterNo,k.ProtokolNo,k.Doktor,k.Isteyen,k.Durum,k.Tetkikler,k.NotMetin,k.Not]
+              .join(' ').toLowerCase();
+  });
+}
+
+function suz(){
+  return kayitlar.filter(function(k){
+    var d = k.Durum || '';
+    var aktifDurum = Object.keys(secilenDurumlar).filter(function(x){return secilenDurumlar[x];});
+    if(aktifDurum.length && aktifDurum.indexOf(d) < 0) return false;
+    if(secilenDoktor && k.Doktor !== secilenDoktor) return false;
+    if(sadeceNot && k.NotHpv !== 'EVET') return false;
+    if(aramaMetni && k._ara.indexOf(aramaMetni) < 0) return false;
+    return true;
+  });
+}
+
+function sirala(liste){
+  var a = siraAlan, y = siraYon;
+  return liste.slice().sort(function(p,q){
+    var x=p[a], z=q[a];
+    if(typeof x === 'number' || typeof z === 'number'){
+      return ((x||0) - (z||0)) * y;
+    }
+    x=String(x||''); z=String(z||'');
+    return x.localeCompare(z,'tr') * y;
+  });
+}
+
+// Satirin rengini belirler. Notta HPV cikmissa bordo, yoksa durum rengi.
+function renkSinifi(k){
+  if(k.NotHpv === 'EVET') return 'NOTTA';
+  return String(k.Durum||'').replace(/[^A-Z_]/g,'') || 'DIGER';
+}
+
+var SUTUNLAR = [
+  {alan:'DefterNoSayi', baslik:'Defter',   g:function(k){
+      return '<span class="dno '+renkSinifi(k)+'">'+kac(k.DefterNo)+'</span>';}},
+  {alan:'ProtokolNo',   baslik:'Protokol', g:function(k){return '<span class="mono">'+kac(k.ProtokolNo)+'</span>';}},
+  {alan:'KayitSayi',    baslik:'Kayit',    g:function(k){return kac(k.KayitTarihi);}},
+  {alan:'Doktor',       baslik:'Patolog',  g:function(k){return kac(k.Doktor);}},
+  {alan:'Durum',        baslik:'Durum',    g:function(k){
+      var s = '<span class="rz '+kac(k.Durum)+'">'+kac(k.Durum)+'</span>';
+      if(k.NotHpv === 'EVET') s += ' <span class="rz NOTTA">NOTTA HPV</span>';
+      return s;}},
+  {alan:'SonucSayi',    baslik:'Sonuc tarihi', g:function(k){return kac(k.SonucTarihi);}},
+  {alan:'Tetkikler',    baslik:'Sonuc',    g:function(k){
+      var s = '<div class="sonuc">'+kac(k.Tetkikler)+'</div>';
+      if(k.NotHpv === 'EVET'){
+        s += '<div class="notbay">&#9888; Epikriz/hasta notunda HPV geciyor</div>';
+        if(k.NotMetin) s += '<div class="notmet">'+kac(k.NotMetin)+'</div>';
+      }
+      return s;
+  }}
+];
+
+function kac(s){
+  return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function cipleriCiz(){
+  var c = document.getElementById('cips');
+  var say = {};
+  kayitlar.forEach(function(k){ say[k.Durum] = (say[k.Durum]||0)+1; });
+  c.innerHTML = '';
+  DURUMLAR.forEach(function(d){
+    if(!say[d.ad]) return;
+    var b = document.createElement('div');
+    b.className = 'cip ' + d.sinif + (secilenDurumlar[d.ad] ? ' aktif' : '');
+    b.innerHTML = d.ad + '<span class="n">' + say[d.ad] + '</span>';
+    b.onclick = function(){
+      secilenDurumlar[d.ad] = !secilenDurumlar[d.ad];
+      cipleriCiz(); ciz();
+    };
+    c.appendChild(b);
+  });
+  // Notta HPV gecenler ayri bir renk kategorisi (bordo) - kendi cipi olsun
+  var nsay = kayitlar.filter(function(k){return k.NotHpv==='EVET';}).length;
+  if(nsay){
+    var nb = document.createElement('div');
+    nb.className = 'cip notta' + (sadeceNot ? ' aktif' : '');
+    nb.innerHTML = 'NOTTA HPV<span class="n">' + nsay + '</span>';
+    nb.onclick = function(){
+      sadeceNot = !sadeceNot;
+      document.getElementById('bNot').className = 'dugme' + (sadeceNot ? ' vurgu' : '');
+      cipleriCiz(); ciz();
+    };
+    c.appendChild(nb);
+  }
+}
+
+function doktorlariDoldur(){
+  var say = {};
+  kayitlar.forEach(function(k){ if(k.Doktor) say[k.Doktor] = (say[k.Doktor]||0)+1; });
+  var adlar = Object.keys(say).sort(function(a,b){ return say[b]-say[a]; });
+  var sel = document.getElementById('fDoktor');
+  sel.innerHTML = '<option value="">Tum patologlar (' + kayitlar.length + ')</option>';
+  adlar.forEach(function(a){
+    var o = document.createElement('option');
+    o.value = a; o.textContent = a + '  (' + say[a] + ')';
+    sel.appendChild(o);
+  });
+  if(VERI.varsayilanDoktor && say[VERI.varsayilanDoktor]){
+    sel.value = VERI.varsayilanDoktor;
+    secilenDoktor = VERI.varsayilanDoktor;
+  }
+}
+
+function basliklariCiz(){
+  var tr = document.getElementById('baslik');
+  tr.innerHTML = '';
+  SUTUNLAR.forEach(function(s){
+    var th = document.createElement('th');
+    th.innerHTML = s.baslik + (siraAlan === s.alan ? '<span class="ok">' + (siraYon>0?'&#9650;':'&#9660;') + '</span>' : '');
+    th.onclick = function(){
+      if(siraAlan === s.alan) siraYon = -siraYon; else { siraAlan = s.alan; siraYon = 1; }
+      basliklariCiz(); ciz();
+    };
+    tr.appendChild(th);
+  });
+}
+
+function ciz(){
+  var liste = sirala(suz());
+  var g = document.getElementById('govde');
+  g.innerHTML = liste.map(function(k){
+    return '<tr class="r ' + renkSinifi(k) + '">' +
+           SUTUNLAR.map(function(s){ return '<td>' + s.g(k) + '</td>'; }).join('') + '</tr>';
+  }).join('');
+  document.getElementById('bosluk').style.display = liste.length ? 'none' : 'block';
+  document.getElementById('tablo').style.display  = liste.length ? '' : 'none';
+
+  var poz = liste.filter(function(k){return k.Durum==='POZITIF';}).length;
+  var not = liste.filter(function(k){return k.NotHpv==='EVET';}).length;
+  var ek = notVar ? ('  |  notta HPV: ' + not) : '';
+  document.getElementById('sayac').textContent =
+      liste.length + ' / ' + kayitlar.length + ' kayit  |  pozitif: ' + poz + ek;
+  return liste;
+}
+
+document.getElementById('fDoktor').onchange = function(){ secilenDoktor = this.value; ciz(); };
+document.getElementById('fArama').oninput   = function(){ aramaMetni = this.value.toLowerCase().trim(); ciz(); };
+document.getElementById('bNot').onclick = function(){
+  sadeceNot = !sadeceNot;
+  this.className = 'dugme' + (sadeceNot ? ' vurgu' : '');
+  cipleriCiz(); ciz();
+};
+document.getElementById('bTemizle').onclick = function(){
+  secilenDurumlar = {}; secilenDoktor = ''; aramaMetni = ''; sadeceNot = false;
+  document.getElementById('fDoktor').value = '';
+  document.getElementById('fArama').value = '';
+  document.getElementById('bNot').className = 'dugme';
+  cipleriCiz(); ciz();
+};
+document.getElementById('bDisa').onclick = function(){
+  var liste = sirala(suz());
+  var bas = ['DefterNo','ProtokolNo','KayitTarihi','Doktor','Durum','SonucTarihi','Tetkikler','NotHpv','NotMetin'];
+  var sat = [bas.join(';')];
+  liste.forEach(function(k){
+    sat.push(bas.map(function(b){ return '"' + String(k[b]==null?'':k[b]).replace(/"/g,'""') + '"'; }).join(';'));
+  });
+  var blob = new Blob(['\ufeff' + sat.join('\r\n')], {type:'text/csv;charset=utf-8'});
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'hpv_secim.csv';
+  a.click();
+};
+
+// Veri geldikten sonra (yerelde hemen, bulutta fetch bitince) cizer.
+// Bulutta "Yenile" ile tekrar cagrilir; secili filtreler korunur.
+function baslat(){
+  kayitlar = VERI.kayitlar || [];
+  notVar   = !!VERI.notVar;
+  hazirla();
+  var kaynak = BULUT ? 'bulut' : 'hpv_takip.csv';
+  document.getElementById('altbilgi').textContent =
+    'Kaynak: ' + kaynak + '  -  olusturma ' + (VERI.olusturma||'') +
+    (VERI.yuklenme ? '  -  buluta yuklenme ' + VERI.yuklenme : '') +
+    (notVar ? '' : '  -  not taramasi henuz yapilmadi (-NotTara)');
+  var oncekiDoktor = secilenDoktor;
+  cipleriCiz(); doktorlariDoldur();
+  if(oncekiDoktor){ document.getElementById('fDoktor').value = oncekiDoktor; secilenDoktor = document.getElementById('fDoktor').value; }
+  basliklariCiz(); ciz();
+}
+
+// ---- BULUT MODU (GitHub Pages) ----
+// Yerel dosyada VERI gomulu gelir ve bu kisim hic calismaz. Pages'te VERI
+// bos: kimlik (Apps Script dagitim kimligi) + sifre (PANEL_TOKEN) ile
+// bulut\hpv_panel.gs'den JSON okunur. Ikisi baglantinin '#' sonrasindan
+// ya da giris formundan gelir.
+var BULUT = null;
+var HAFIZA = 'hpvPanelGiris';
+
+function hashOku(){
+  var h = {};
+  location.hash.replace(/^#/,'').split('&').forEach(function(p){
+    var i = p.indexOf('=');
+    if(i > 0){ try{ h[p.slice(0,i)] = decodeURIComponent(p.slice(i+1)); }catch(e){} }
+  });
+  return h;
+}
+// Kimlik yerine butun /exec adresi yapistirilirsa da calissin.
+function kimlikAyikla(d){
+  d = String(d||'').trim();
+  var m = d.match(/\/macros\/s\/([A-Za-z0-9_-]+)/);
+  return m ? m[1] : d;
+}
+function hafizaOku(){ try{ var s = localStorage.getItem(HAFIZA); return s ? JSON.parse(s) : null; }catch(e){ return null; } }
+function hafizaYaz(o){ try{ if(o) localStorage.setItem(HAFIZA, JSON.stringify(o)); else localStorage.removeItem(HAFIZA); }catch(e){} }
+
+function girisGoster(hata){
+  document.getElementById('giris').style.display = 'flex';
+  document.getElementById('girisHata').textContent = hata || '';
+  document.getElementById('gDugme').disabled = false;
+}
+
+function bulutGetir(g, hatirla){
+  document.getElementById('sayac').textContent = 'yukleniyor...';
+  var url = 'https://script.google.com/macros/s/' + encodeURIComponent(g.d) +
+            '/exec?json=1&y=' + encodeURIComponent(g.y) + '&_=' + Date.now();
+  fetch(url).then(function(r){ return r.text(); }).then(function(t){
+    var c;
+    try{ c = JSON.parse(t); }
+    catch(e){ throw new Error('Kimlik hatali ya da dagitim "Herkes" erisimine acik degil.'); }
+    if(!c.ok) throw new Error(c.hata === 'yetkisiz' ? 'Sifre hatali.' : ('Hata: ' + (c.hata || 'bilinmiyor')));
+    if(!c.veri || !c.veri.kayitlar) throw new Error('Bulutta henuz veri yok. Ajan bir tarama yapinca (ya da -BulutYukle) gelir.');
+    BULUT = g;
+    if(hatirla) hafizaYaz(g);
+    document.getElementById('giris').style.display = 'none';
+    VERI = c.veri;
+    baslat();
+  }).catch(function(e){
+    document.getElementById('sayac').textContent = '';
+    girisGoster(e && e.message ? e.message : String(e));
+  });
+}
+
+function bulutKur(){
+  document.title = 'HPV Takip';
+  var div = document.createElement('div');
+  div.id = 'giris';
+  div.innerHTML =
+    '<form id="gForm" autocomplete="on">' +
+    '<h2>HPV Takip Paneli</h2><p>Kimlik ve sifre ile giris</p>' +
+    '<label for="gKimlik">Kimlik</label><input type="text" id="gKimlik" autocomplete="username" spellcheck="false">' +
+    '<label for="gSifre">Sifre</label><input type="password" id="gSifre" autocomplete="current-password">' +
+    '<div class="hat"><label style="display:inline;margin:0"><input type="checkbox" id="gHatirla"> Bu cihazda hatirla</label></div>' +
+    '<button type="submit" class="dugme vurgu" id="gDugme">Giris</button>' +
+    '<div id="girisHata"></div></form>';
+  document.body.appendChild(div);
+
+  var satir = document.querySelector('header .satir');
+  var bY = document.createElement('button'); bY.className = 'dugme'; bY.textContent = 'Yenile';
+  bY.onclick = function(){ if(BULUT) bulutGetir(BULUT, false); };
+  var bC = document.createElement('button'); bC.className = 'dugme'; bC.textContent = 'Cikis';
+  bC.onclick = function(){
+    hafizaYaz(null); BULUT = null; VERI = null;
+    kayitlar = []; document.getElementById('govde').innerHTML = '';
+    if(location.hash) history.replaceState(null, '', location.pathname + location.search);
+    girisGoster('');
+  };
+  satir.insertBefore(bC, document.getElementById('sayac'));
+  satir.insertBefore(bY, bC);
+
+  document.getElementById('gForm').onsubmit = function(ev){
+    ev.preventDefault();
+    var d = kimlikAyikla(document.getElementById('gKimlik').value);
+    var y = String(document.getElementById('gSifre').value || '').trim();
+    if(!d || !y){ girisGoster('Kimlik ve sifre gerekli.'); return; }
+    document.getElementById('gDugme').disabled = true;
+    document.getElementById('girisHata').textContent = 'Kontrol ediliyor...';
+    bulutGetir({d:d, y:y}, document.getElementById('gHatirla').checked);
+  };
+
+  var h = hashOku();
+  if(h.d && h.y){ bulutGetir({d:kimlikAyikla(h.d), y:h.y}, false); return; }
+  var k = hafizaOku();
+  if(k && k.d && k.y){ bulutGetir(k, false); return; }
+  girisGoster('');
+}
+
+if(VERI) baslat(); else bulutKur();
+</script></body></html>
