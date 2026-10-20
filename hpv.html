@@ -390,7 +390,13 @@ function bulutGetir(g, hatirla){
     baslat();
   }).catch(function(e){
     document.getElementById('sayac').textContent = '';
-    girisGoster(e && e.message ? e.message : String(e));
+    // fetch'in kendisi patlarsa (TypeError: Failed to fetch) cevap hic
+    // gelmemistir: cogu zaman dagitim 'Herkes' degil ve Google giris
+    // sayfasina yonlendiriyor, ya da doGet hata veriyor.
+    var m = e && e.message ? e.message : String(e);
+    if(e instanceof TypeError) m = 'Sunucuya ulasilamadi. Apps Script dagitiminda "Erisimi olan: Herkes" mi? ' +
+      'Denemek icin su adresi tarayicida ac: script.google.com/macros/s/<Kimlik>/exec?json=1&y=<Sifre>';
+    girisGoster(m);
   });
 }
 
