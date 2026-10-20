@@ -394,9 +394,17 @@ function bulutGetir(g, hatirla){
     // gelmemistir: cogu zaman dagitim 'Herkes' degil ve Google giris
     // sayfasina yonlendiriyor, ya da doGet hata veriyor.
     var m = e && e.message ? e.message : String(e);
-    if(e instanceof TypeError) m = 'Sunucuya ulasilamadi. Apps Script dagitiminda "Erisimi olan: Herkes" mi? ' +
-      'Denemek icin su adresi tarayicida ac: script.google.com/macros/s/<Kimlik>/exec?json=1&y=<Sifre>';
+    if(e instanceof TypeError) m = 'Sunucuya ulasilamadi. Apps Script dagitiminda "Erisimi olan: Herkes" mi?';
     girisGoster(m);
+    // Teshis: ayni adresi yeni sekmede ac. Ust duzey gezinmede CORS yok,
+    // kullanici Google'in gercek cevabini (giris ekrani, hata, JSON) gorur.
+    if(e instanceof TypeError){
+      var a = document.createElement('a');
+      a.href = url; a.target = '_blank'; a.rel = 'noopener noreferrer';
+      a.textContent = 'Teshis icin tikla (yeni sekmede acilan sayfanin goruntusunu al)';
+      a.style.cssText = 'display:block;margin-top:8px;font-weight:600;color:#1a73e8';
+      document.getElementById('girisHata').appendChild(a);
+    }
   });
 }
 
